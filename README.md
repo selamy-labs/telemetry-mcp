@@ -14,7 +14,7 @@ up.
 
 > **Repo structure:** this ships as a per-server repo, following the shipped
 > convention (e.g. `reddit-mcp`, `dispatch-mcp`). Whether the fleet's MCP
-> servers consolidate into a single `agent-mcp` repo is pending decision #653;
+> servers consolidate into a single `agent-mcp` repo is pending a consolidation decision;
 > until that lands, this stays per-server.
 
 ## Tools
