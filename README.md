@@ -10,6 +10,11 @@ schema, run a bounded query, and compute a single aggregate*. It turns ad-hoc
 "go read the numbers" scripts into constrained, structured tools an agent can
 call.
 
+The package also ships an opt-in, write-side sibling entrypoint,
+`telemetry-emit-mcp`, for **at-will OpenTelemetry emission**. It is separate
+from the default query server so `telemetry-mcp` stays read-only and
+zero-dependency by default.
+
 The server is **schema-agnostic by design**: it hard-codes no dataset, table, or
 metric. The shape of the available telemetry is supplied entirely by the
 injected backend, so the same server works against whatever dataset infra wires
@@ -29,6 +34,54 @@ up.
 | `metrics_query(source, start, end, filters?, limit?)` | Bounded, read-only query over `[start, end)`; returns structured rows. |
 | `metrics_summary(metric, start, end, agg)` | A single aggregate (`count`/`sum`/`avg`/`min`/`max`) of a metric over a range. |
 
+## At-will emit server
+
+`telemetry-emit-mcp` is a separate MCP server for agents that need to record a
+value or occurrence while they work without managing OpenTelemetry context by
+hand. It exports vendor-neutral OTLP using the standard OpenTelemetry SDK and
+honors the `OTEL_EXPORTER_OTLP_*` environment variables the runtime already
+uses.
+
+| Tool | Signal | Purpose |
+| --- | --- | --- |
+| `telemetry_emit_metric(name, value, kind, unit?, attributes?, agent?)` | Metric | Emit ad-hoc values such as equity, P&L, queue depth, and counters. This is the primary at-will path and does not require trace context. |
+| `telemetry_emit_event(name, body?, attributes?, traceparent?, agent?)` | Event/log | Emit occurrence markers. If a W3C `traceparent` is supplied, the event is attached to that active trace; otherwise no span is created. |
+| `telemetry_emit_span(name, traceparent, attributes?, status?, agent?)` | Span | Emit a bounded operation span only when it can be parented to an active trajectory span. Missing or invalid `traceparent` is rejected so the server never creates orphan spans. |
+
+This routing follows the public `otel-emit-at-will` skill:
+
+- values are metrics;
+- occurrences are events;
+- spans are only for bounded operations that can be auto-parented.
+
+The default read-only query server does not import the OpenTelemetry SDK. Install
+the write-side server explicitly:
+
+```bash
+pipx install "telemetry-mcp[emit] @ git+https://github.com/selamy-labs/telemetry-mcp@v0.1.0"
+```
+
+MCP client config for the emit server:
+
+```json
+{
+  "mcpServers": {
+    "telemetry-emit": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/selamy-labs/telemetry-mcp@v0.1.0#egg=telemetry-mcp[emit]",
+        "telemetry-emit-mcp"
+      ],
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel-collector.example.internal",
+        "OTEL_SERVICE_NAME": "nash-agent"
+      }
+    }
+  }
+}
+```
+
 `start` / `end` are ISO-8601 instants. `filters` is an optional `column -> value`
 mapping (keys are validated; values are bound as query parameters by the backend,
 never string-interpolated). `limit` is capped by the core.
@@ -41,7 +94,8 @@ covered by tests.
 
 - **Read-only.** The tools are list/describe/query/summary. There is no write,
   no DDL, and no `run_sql` / raw-query escape hatch — a caller cannot supply
-  query text.
+  query text. The optional `telemetry-emit-mcp` entrypoint is a separate
+  write-side server and does not register any query tools.
 - **Bounded.** Every query is time-ranged and `limit`-capped (`MAX_LIMIT`), so a
   call cannot pull an unbounded result set.
 - **No embedded credentials.** Nothing in this package stores a token or key.
@@ -100,6 +154,10 @@ wired** — that is the infra half:
    static SA key.)
 4. **Config.** Set `TELEMETRY_BQ_PROJECT` and `TELEMETRY_BQ_DATASET` for the
    workload.
+
+The write-side `telemetry-emit-mcp` needs the runtime's OTLP configuration
+instead: `OTEL_EXPORTER_OTLP_ENDPOINT`, optional OTLP headers/protocol variables,
+and `OTEL_SERVICE_NAME`.
 
 Until step 1 lands, the production backend raises and only the fake-backed
 offline path runs — so this scaffold is safe to ship and CI is green without any
