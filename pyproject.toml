@@ -31,18 +31,28 @@ dependencies = []
 mcp = [
   "mcp>=1.2",
 ]
+emit = [
+  "mcp>=1.2",
+  "opentelemetry-api>=1.28",
+  "opentelemetry-exporter-otlp-proto-http>=1.28",
+  "opentelemetry-sdk>=1.28",
+]
 bigquery = [
   "google-cloud-bigquery>=3.0",
 ]
 test = [
   "coverage[toml]>=7.6",
   "mcp>=1.2",
+  "opentelemetry-api>=1.28",
+  "opentelemetry-exporter-otlp-proto-http>=1.28",
+  "opentelemetry-sdk>=1.28",
   "pytest>=8.3",
   "ruff>=0.8",
 ]
 
 [project.scripts]
 telemetry-mcp = "telemetry_mcp.mcp_server:main"
+telemetry-emit-mcp = "telemetry_mcp.emit_mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/selamy-labs/telemetry-mcp"
@@ -59,6 +69,7 @@ source = ["telemetry_mcp"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+omit = ["src/telemetry_mcp/emit_otlp.py"]
 
 [tool.ruff]
 line-length = 120
