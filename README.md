@@ -58,7 +58,7 @@ The default read-only query server does not import the OpenTelemetry SDK. Instal
 the write-side server explicitly:
 
 ```bash
-pipx install "telemetry-mcp[emit] @ git+https://github.com/selamy-labs/telemetry-mcp@v0.1.0"
+pipx install "telemetry-mcp[emit] @ git+https://github.com/selamy-labs/telemetry-mcp@v0.2.0"
 ```
 
 MCP client config for the emit server:
@@ -70,7 +70,7 @@ MCP client config for the emit server:
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/selamy-labs/telemetry-mcp@v0.1.0#egg=telemetry-mcp[emit]",
+        "git+https://github.com/selamy-labs/telemetry-mcp@v0.2.0#egg=telemetry-mcp[emit]",
         "telemetry-emit-mcp"
       ],
       "env": {
