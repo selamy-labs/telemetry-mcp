@@ -1,5 +1,8 @@
 # telemetry-mcp
 
+[![CI](https://github.com/selamy-labs/telemetry-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/selamy-labs/telemetry-mcp/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+
 `telemetry-mcp` is a small, **read-only** [Model Context
 Protocol](https://modelcontextprotocol.io) server that exposes a configurable
 metrics/telemetry backend as typed tools: *list sources, describe a source's
