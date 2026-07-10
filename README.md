@@ -211,6 +211,9 @@ in-memory backend — no GCP, no network. The default backend
 core package has zero runtime dependencies; the `mcp` SDK and
 `google-cloud-bigquery` are optional extras.
 
+See the [System Context](docs/architecture/system-context.md) for the runtime
+boundaries of the query and emit servers.
+
 ## Development
 
 ```bash
