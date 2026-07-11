@@ -52,6 +52,6 @@ def test_build_server_registers_emit_tools() -> None:
 
 def test_main_runs_the_built_server(monkeypatch: pytest.MonkeyPatch) -> None:
     ran: list[bool] = []
-    monkeypatch.setattr(FastMCP, "run", lambda self, *a, **k: ran.append(True))
+    monkeypatch.setattr(FastMCP, "run", lambda self, *_args, **_kwargs: ran.append(True))
     emit_mcp_server.main()
     assert ran == [True]

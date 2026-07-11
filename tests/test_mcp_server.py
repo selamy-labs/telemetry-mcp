@@ -102,6 +102,6 @@ def test_service_is_built_from_env_when_unset(monkeypatch: pytest.MonkeyPatch) -
 
 def test_main_runs_the_built_server(monkeypatch: pytest.MonkeyPatch) -> None:
     ran: list[bool] = []
-    monkeypatch.setattr(FastMCP, "run", lambda self, *a, **k: ran.append(True))
+    monkeypatch.setattr(FastMCP, "run", lambda self, *_args, **_kwargs: ran.append(True))
     mcp_server.main()
     assert ran == [True]
