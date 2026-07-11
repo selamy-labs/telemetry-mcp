@@ -220,6 +220,7 @@ boundaries of the query and emit servers.
 python -m pip install -e ".[test]"
 ruff format --check .
 ruff check .
+vulture src tests --min-confidence 80
 coverage run -m pytest
 coverage report --fail-under=95
 ```
