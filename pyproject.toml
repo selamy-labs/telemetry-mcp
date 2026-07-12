@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "telemetry-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "A read-only MCP server that queries a configurable metrics backend (list/describe/query/summary) as typed tools, with credentials resolved at call time and a schema-agnostic backend interface."
 readme = "README.md"
 requires-python = ">=3.10"

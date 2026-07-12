@@ -4,6 +4,11 @@ All notable changes to telemetry-mcp are documented here. Versions follow
 [semantic versioning](https://semver.org/) and are published as git tags
 (`vX.Y.Z`). Entries are derived from the merged history at each tag.
 
+## [v0.3.0] - 2026-07-12
+
+### Added
+- Bounded, catalog-driven BigQuery read adapter with parameterized queries, scan caps, and offline coverage (#16).
+
 ## [v0.2.0] - 2026-06-18
 
 ### Added
