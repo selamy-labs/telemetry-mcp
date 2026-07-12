@@ -42,6 +42,7 @@ bigquery = [
 ]
 test = [
   "coverage[toml]>=7.6",
+  "google-cloud-bigquery>=3.0",
   "mcp>=1.2",
   "opentelemetry-api>=1.28",
   "opentelemetry-exporter-otlp-proto-http>=1.28",
