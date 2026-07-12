@@ -168,22 +168,18 @@ The write-side `telemetry-emit-mcp` needs the runtime's OTLP configuration
 instead: `OTEL_EXPORTER_OTLP_ENDPOINT`, optional OTLP headers/protocol variables,
 and `OTEL_SERVICE_NAME`.
 
-Until step 1 lands, the production backend raises and only the fake-backed
-offline path runs — so this scaffold is safe to ship and CI is green without any
-GCP access.
-
 ## Install
 
-Run the unreleased main branch directly from GitHub with both required extras:
+Run the tagged release directly from GitHub with both required extras:
 
 ```bash
-uvx --from "git+https://github.com/selamy-labs/telemetry-mcp@main#egg=telemetry-mcp[mcp,bigquery]" telemetry-mcp
+uvx --from "git+https://github.com/selamy-labs/telemetry-mcp@v0.3.0#egg=telemetry-mcp[mcp,bigquery]" telemetry-mcp
 ```
 
 Or with pipx:
 
 ```bash
-pipx install "telemetry-mcp[mcp,bigquery] @ git+https://github.com/selamy-labs/telemetry-mcp@main"
+pipx install "telemetry-mcp[mcp,bigquery] @ git+https://github.com/selamy-labs/telemetry-mcp@v0.3.0"
 ```
 
 ## MCP client config
@@ -195,7 +191,7 @@ pipx install "telemetry-mcp[mcp,bigquery] @ git+https://github.com/selamy-labs/t
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/selamy-labs/telemetry-mcp@main#egg=telemetry-mcp[mcp,bigquery]",
+        "git+https://github.com/selamy-labs/telemetry-mcp@v0.3.0#egg=telemetry-mcp[mcp,bigquery]",
         "telemetry-mcp"
       ],
       "env": {
