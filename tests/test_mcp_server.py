@@ -13,9 +13,11 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 
 from telemetry_mcp import mcp_server
+from telemetry_mcp.backend import BigQueryBackend, BigQueryCatalog, MetricCatalogEntry, SourceCatalogEntry
 from telemetry_mcp.core import MetricsService
 from tests.conftest import FakeClock, RecordingCredentialProvider
 from tests.fixtures import backend
+from tests.test_backend import FakeBigQueryClient, FakeQueryJob, RecordingClientFactory
 
 START = "2026-06-16T00:00:00Z"
 END = "2026-06-17T00:00:00Z"
@@ -90,14 +92,49 @@ def test_build_server_registers_all_tools() -> None:
 
 
 def test_service_is_built_from_env_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    # No service pre-installed -> the server builds one with the (not-wired)
-    # BigQuery backend, which fails fast. No GCP/network is touched because the
-    # backend raises before any client is created.
-    monkeypatch.setenv("TELEMETRY_BQ_PROJECT", "speedforge-prod-499002")
-    monkeypatch.setenv("TELEMETRY_BQ_DATASET", "telemetry")
+    monkeypatch.delenv("TELEMETRY_BQ_PROJECT", raising=False)
+    monkeypatch.delenv("TELEMETRY_BQ_DATASET", raising=False)
+    monkeypatch.delenv("TELEMETRY_BQ_CATALOG", raising=False)
     mcp_server.set_service(None)
-    with pytest.raises(ToolError, match="not wired up"):
+    with pytest.raises(ToolError, match="TELEMETRY_BQ_PROJECT"):
         mcp_server.metrics_list_sources()
+
+
+def test_all_tools_round_trip_through_fake_bigquery_client() -> None:
+    catalog = BigQueryCatalog(
+        sources={
+            "ci.runs": SourceCatalogEntry(
+                table="ci_runs",
+                time_column="started_at",
+                schema={"started_at": "TIMESTAMP", "repo": "STRING", "duration_ms": "INT64"},
+                filters=frozenset({"repo"}),
+            )
+        },
+        metrics={"ci.runs.duration_ms": MetricCatalogEntry(source="ci.runs", column="duration_ms")},
+    )
+    client = FakeBigQueryClient(
+        [
+            FakeQueryJob([{"started_at": START, "repo": "nash", "duration_ms": 1200}]),
+            FakeQueryJob([{"value": 1200.0}]),
+        ]
+    )
+    service = MetricsService(
+        BigQueryBackend(
+            project="telemetry-prod",
+            dataset="telemetry",
+            catalog=catalog,
+            maximum_bytes_billed=1_000_000,
+            client_factory=RecordingClientFactory(client),
+        ),
+        credentials=RecordingCredentialProvider("fake-bigquery-credentials"),
+    )
+    mcp_server.set_service(service)
+
+    assert mcp_server.metrics_list_sources()["count"] == 1
+    assert mcp_server.metrics_describe("ci.runs")["name"] == "ci.runs"
+    assert mcp_server.metrics_query("ci.runs", START, END, {"repo": "nash"}, 10)["row_count"] == 1
+    assert mcp_server.metrics_summary("ci.runs.duration_ms", START, END, "avg")["value"] == 1200.0
+    assert len(client.queries) == 2
 
 
 def test_main_runs_the_built_server(monkeypatch: pytest.MonkeyPatch) -> None:

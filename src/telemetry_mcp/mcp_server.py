@@ -1,6 +1,7 @@
 """MCP server exposing read-only telemetry/metrics queries as typed tools.
 
-This is an optional integration: install it with ``pip install telemetry-mcp[mcp]``.
+This is an optional integration: install it with
+``pip install telemetry-mcp[mcp,bigquery]``.
 The core package keeps its runtime dependencies minimal (stdlib only); the
 ``mcp`` SDK is required only to run this server.
 
@@ -12,14 +13,13 @@ failures (unknown source/metric, bad agg, backend/auth error) surface as
 
 Backend selection (deliberate)
 ------------------------------
-By default this server constructs the production :class:`BigQueryBackend`, which
-is **not live-wired** and fails fast until infra completes it. Tests (and any
-offline use) inject a fake in-memory backend via :func:`set_service`, so nothing
-here touches GCP or the network unless infra has wired the real adapter.
+By default this server constructs the production :class:`BigQueryBackend` from
+an explicit source catalog. Tests inject a fake backend or fake BigQuery client
+via :func:`set_service`, so the suite never touches GCP or the network.
 
 Configuration is resolved at call time from the environment:
-``TELEMETRY_BQ_PROJECT`` and ``TELEMETRY_BQ_DATASET`` (consumed by the BigQuery
-backend once infra wires it). No credential is ever read or stored here;
+``TELEMETRY_BQ_PROJECT``, ``TELEMETRY_BQ_DATASET``, and
+``TELEMETRY_BQ_CATALOG``. No credential is ever read or stored here;
 identity is resolved per call from WIF/GSM by the credential provider.
 """
 
@@ -33,7 +33,8 @@ try:
     from mcp.server.fastmcp.exceptions import ToolError
 except ModuleNotFoundError as error:  # pragma: no cover - import guard
     raise SystemExit(
-        "telemetry-mcp server requires the 'mcp' package. Install it with: pip install 'telemetry-mcp[mcp]'"
+        "telemetry-mcp server requires optional dependencies. "
+        "Install them with: pip install 'telemetry-mcp[mcp,bigquery]'"
     ) from error
 
 from telemetry_mcp.backend import BigQueryBackend
@@ -61,6 +62,8 @@ def _build_service() -> MetricsService:
     backend = BigQueryBackend(
         project=os.environ.get("TELEMETRY_BQ_PROJECT"),
         dataset=os.environ.get("TELEMETRY_BQ_DATASET"),
+        catalog=os.environ.get("TELEMETRY_BQ_CATALOG"),
+        maximum_bytes_billed=os.environ.get("TELEMETRY_BQ_MAXIMUM_BYTES_BILLED", "100000000"),
     )
     return MetricsService(backend)
 

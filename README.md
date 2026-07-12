@@ -15,10 +15,10 @@ The package also ships an opt-in, write-side sibling entrypoint,
 from the default query server so `telemetry-mcp` stays read-only and
 zero-dependency by default.
 
-The server is **schema-agnostic by design**: it hard-codes no dataset, table, or
-metric. The shape of the available telemetry is supplied entirely by the
-injected backend, so the same server works against whatever dataset infra wires
-up.
+The server is **catalog-driven by design**: it contains no built-in dataset,
+table, or metric names. Runtime configuration maps public handles to an explicit
+allowlist of BigQuery tables, time columns, filters, projections, and aggregate
+columns.
 
 > **Repo structure:** this ships as a per-server repo, following the shipped
 > convention (e.g. `reddit-mcp`, `dispatch-mcp`). Whether the fleet's MCP
@@ -107,9 +107,11 @@ covered by tests.
   conservative identifier shape, so a rejected lookup cannot smuggle injection or
   path traversal into the backend (defence in depth; the backend's own allowlist
   is the real gate).
-- **Schema-agnostic.** No dataset/table/metric is hard-coded; the backend
-  defines what exists, so the server cannot leak the existence of anything the
-  backend does not expose.
+- **Catalogued identifiers.** Project, dataset, table, time, projection,
+  filter, and metric identifiers must pass conservative validation and come
+  from the runtime catalog. Caller-controlled values are query parameters.
+- **Scan-capped.** Every BigQuery job sets `maximum_bytes_billed` and disables
+  legacy SQL. Row queries fetch at most `limit + 1` rows to report truncation.
 
 ### Deliberate omissions
 
@@ -122,38 +124,45 @@ covered by tests.
 
 | Variable | Effect |
 | --- | --- |
-| `TELEMETRY_BQ_PROJECT` | BigQuery project the production backend targets (consumed once infra wires it). |
-| `TELEMETRY_BQ_DATASET` | BigQuery dataset whose tables/views become the available sources. |
+| `TELEMETRY_BQ_PROJECT` | BigQuery project containing the catalogued tables/views. |
+| `TELEMETRY_BQ_DATASET` | BigQuery dataset containing the catalogued tables/views. |
+| `TELEMETRY_BQ_CATALOG` | JSON source and metric allowlist; required. |
+| `TELEMETRY_BQ_MAXIMUM_BYTES_BILLED` | Per-query scan ceiling in bytes; defaults to `100000000`. |
 
 No credentials are read from the environment by this server; identity is
 resolved per call from the runtime (WIF/GSM) by the credential provider.
 
-## What infra must wire (the build split)
+## BigQuery catalog
 
-This repo is the **offline-testable scaffold**. The core, the MCP wrapper, the
-backend *interface*, and a full offline test suite (fake in-memory backend) are
-complete here. The **live BigQuery adapter + credentials are intentionally not
-wired** — that is the infra half:
+The adapter discovers nothing from `INFORMATION_SCHEMA`; only entries in
+`TELEMETRY_BQ_CATALOG` are visible. Each source declares its physical table,
+mandatory time column, projected schema, and permitted equality filters. Each
+metric maps a public handle to one source column:
 
-1. **Backend implementation.** Complete `BigQueryBackend` in
-   `src/telemetry_mcp/backend.py` (currently fails fast with "not wired up").
-   It must implement the read-only, parameterised path:
-   - `list_sources` / `describe` from the dataset's tables/views and
-     `INFORMATION_SCHEMA`.
-   - `query` / `summary` as read-only BigQuery jobs where the time range and
-     filter **values** are passed as query parameters (never interpolated), and
-     `limit` becomes a `LIMIT` clause.
-   - Install the optional dependency: `pip install 'telemetry-mcp[bigquery]'`.
-2. **Dataset.** A BigQuery **dataset** (in the chosen **project**, e.g.
-   `speedforge-prod-499002`) whose tables/views are the telemetry sources. The
-   server adopts whatever schema the dataset has — nothing is hard-coded.
-3. **Identity (keyless).** A **Workload Identity Federation** service account
-   with **read-only** BigQuery access to that dataset (e.g. `roles/bigquery.dataViewer`
-   + `roles/bigquery.jobUser`). The `CredentialProvider` resolves this at call
-   time; **no key is stored in this repo or the image**. (Prefer WIF over a
-   static SA key.)
-4. **Config.** Set `TELEMETRY_BQ_PROJECT` and `TELEMETRY_BQ_DATASET` for the
-   workload.
+```json
+{
+  "sources": {
+    "ci.runs": {
+      "table": "ci_runs",
+      "time_column": "started_at",
+      "description": "CI runner job executions.",
+      "schema": {
+        "started_at": "TIMESTAMP",
+        "repo": "STRING",
+        "duration_ms": "INT64"
+      },
+      "filters": ["repo"]
+    }
+  },
+  "metrics": {
+    "ci.runs.duration_ms": {"source": "ci.runs", "column": "duration_ms"}
+  }
+}
+```
+
+Deployment still owns the dataset and a keyless runtime identity with read-only
+BigQuery access. The adapter creates a client with the credentials resolved for
+each call and stores neither clients nor credentials.
 
 The write-side `telemetry-emit-mcp` needs the runtime's OTLP configuration
 instead: `OTEL_EXPORTER_OTLP_ENDPOINT`, optional OTLP headers/protocol variables,
@@ -165,16 +174,16 @@ GCP access.
 
 ## Install
 
-Run directly from GitHub with the MCP extra:
+Run the unreleased main branch directly from GitHub with both required extras:
 
 ```bash
-uvx --from "git+https://github.com/selamy-labs/telemetry-mcp@v0.1.0#egg=telemetry-mcp[mcp]" telemetry-mcp
+uvx --from "git+https://github.com/selamy-labs/telemetry-mcp@main#egg=telemetry-mcp[mcp,bigquery]" telemetry-mcp
 ```
 
 Or with pipx:
 
 ```bash
-pipx install "telemetry-mcp[mcp] @ git+https://github.com/selamy-labs/telemetry-mcp@v0.1.0"
+pipx install "telemetry-mcp[mcp,bigquery] @ git+https://github.com/selamy-labs/telemetry-mcp@main"
 ```
 
 ## MCP client config
@@ -186,12 +195,14 @@ pipx install "telemetry-mcp[mcp] @ git+https://github.com/selamy-labs/telemetry-
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/selamy-labs/telemetry-mcp@v0.1.0#egg=telemetry-mcp[mcp]",
+        "git+https://github.com/selamy-labs/telemetry-mcp@main#egg=telemetry-mcp[mcp,bigquery]",
         "telemetry-mcp"
       ],
       "env": {
         "TELEMETRY_BQ_PROJECT": "speedforge-prod-499002",
-        "TELEMETRY_BQ_DATASET": "telemetry"
+        "TELEMETRY_BQ_DATASET": "telemetry",
+        "TELEMETRY_BQ_CATALOG": "{\"sources\":{...},\"metrics\":{...}}",
+        "TELEMETRY_BQ_MAXIMUM_BYTES_BILLED": "100000000"
       }
     }
   }
@@ -207,8 +218,8 @@ through an **injected backend** (`telemetry_mcp.backend.MetricsBackend`) and all
 credential resolution through an **injected `CredentialProvider`**, so the full
 validate / route / shape path is exercised offline in tests with a fake
 in-memory backend — no GCP, no network. The default backend
-(`BigQueryBackend`) uses only the standard library until infra wires it, so the
-core package has zero runtime dependencies; the `mcp` SDK and
+(`BigQueryBackend`) lazily imports its optional client dependency, so the core
+package has zero runtime dependencies; the `mcp` SDK and
 `google-cloud-bigquery` are optional extras.
 
 See the [System Context](docs/architecture/system-context.md) for the runtime

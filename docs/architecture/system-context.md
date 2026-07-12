@@ -13,7 +13,7 @@ flowchart LR
         emit["telemetry-emit-mcp<br/>Opt-in emit server"]
     end
 
-    backend["MetricsBackend implementation<br/>Injected; BigQuery adapter not wired"]
+    backend["BigQueryBackend<br/>Catalogued, bounded SELECT adapter"]
     identity["Ambient runtime identity<br/>ADC or WIF"]
     otlp["OTLP endpoint<br/>Runtime configured"]
 
@@ -26,8 +26,8 @@ flowchart LR
 
 The query and emit paths do not share capabilities: `telemetry-mcp` exposes no
 mutation or raw-query tool, while `telemetry-emit-mcp` does not register query
-tools. `BigQueryBackend` remains a fail-fast integration point; tests use an
-in-memory backend and do not require GCP or network access.
+tools. `BigQueryBackend` generates only catalogued, parameterized, scan-capped
+queries; tests inject a fake client and do not require GCP or network access.
 
 This diagram is hand-maintained because the repository has no manifest that
 describes both MCP entrypoints and their adapters. Its source of truth is
